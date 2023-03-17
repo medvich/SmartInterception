@@ -1,0 +1,11 @@
+# Default PyCharm project ignored files
+.idea/
+
+# Jupyter Notebook files
+
+# Pytest cache files
+.pytest_cache/
+
+# Paths
+
+# Files
