@@ -1,0 +1,54 @@
+# YAML Document starts with ---
+# Comments start with #
+
+# Параметры окружения и участников полета, их границы и диапазоны
+
+---
+environment:
+  altitude: 10000
+  initial_distance: 20000
+  initial_heading_error: 10
+  initial_heading_angle: 180
+  target_centered: False
+  initial_psi: 0
+  bounds:
+    termination_time: 150
+    simulation_zone_radius: 60000
+    mach_range: [ 0.5, 7 ]
+    initial_distance_range: [ 500, 40000 ]
+    altitude_range: [ 200, 25000 ]
+missile:
+  bounds:
+    explosion_distance: 15
+    lock_on_distance: 20000
+    overload_max: 45
+    relative_velocity_min: 200
+    mach_range: [ 1.1, 7 ]
+    coordinator_angle_max: 40
+    beta_max: 30
+  initial_state:
+    beta: 0
+    alpha: 3 # const
+    vel: 300
+  energetics:
+    mass0: 155
+    omega0: 55
+    specific_impulse: 1900
+    t_act: 6
+  aerodynamics:
+    cx0_filepath: ./missile/files/cx0.csv
+    cyA_filepath: ./missile/files/cyA.csv
+    wing:
+      area: 0.372
+target:
+  initial_state:
+    vel: 300
+  bounds:
+    overload_max: 8
+    mach_range: [ 0.5, 2 ]
+    detection_distance_range: [ 1000, 40000 ]
+    coordinator_angle_max: 40
+
+
+
+
