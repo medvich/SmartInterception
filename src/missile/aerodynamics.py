@@ -25,8 +25,8 @@ class Aerodynamics:
         return self.cyA(mach) * np.rad2deg(alpha)
 
     def force_x(self, q, mach, alpha):
-        return self.cx(mach, alpha) * q * self.wing.area
+        return self.cx(mach, alpha) * q * self.wing['area'] * 0.25
 
     def force_y(self, q, mach, alpha):
-        return self.cy(mach, alpha) * q * self.wing.area
+        return self.cy(mach, alpha) * q * self.wing['area'] * 1.5
 

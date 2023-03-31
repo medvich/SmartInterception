@@ -16,10 +16,12 @@ class Target2D:
         return f"{self.status}. Current state: {self._state}"
 
     def get_state(self):
-        return self._state
+        return self.t, self._state
 
-    def set_state(self, state):
+    def set_state(self, state, **kw):
         self._state = state
+        if 't' in kw:
+            self.t = kw['t']
 
     def reset(self):
         self.t = 0
@@ -33,10 +35,10 @@ class Target2D:
         )
         self._overload = 0
         self.status = 'Alive'
-        return self.t, self._state
+        return self._state
 
     def step(self, acceleration):
-        assert type(acceleration) is type, 'Acceleration must be a namedtuple with x and z fields'
+        assert ('x' and 'z') in acceleration._fields, 'Acceleration must be a namedtuple with x and z fields'
         assert self._state is not None, 'Call reset before using this method.'
         x, z, vel, psi = self._state
         self._overload = acceleration.z / self.g
@@ -47,12 +49,12 @@ class Target2D:
             acceleration.z / vel
         ], copy=False, dtype=np.float32)
 
-    def _terminal(self):
+    def terminal(self):
         x, z, vel, psi = self._state
         mach = vel / self.sOs
-        if not (min(self.bounds['mach_range']) < mach > max(self.bounds['mach_range'])):
+        if not (min(self.bounds['mach_range']) < mach < max(self.bounds['mach_range'])):
             self.status = 'Out of Ma bounds'
-            return True, f"{self.status}. Ma = {round(mach, 2)}"
+            return True, f"{self.status}. Ma = {mach:.2f}"
         return False, None
 
     def overload(self):

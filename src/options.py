@@ -3,6 +3,7 @@ from typing import Union
 import numpy as np
 import yaml
 import os
+import json
 
 CURRENT_PATH = os.getcwd()
 
@@ -25,38 +26,43 @@ class Options:
         self.los = {'initial_state': {}, 'bounds': {}}
         self.env = values['environment']
 
-        self.make()
+        self.__make()
 
     def __str__(self):
-        return str(
+        return json.dumps(
             {
                 'missile': self.missile,
                 'target': self.target,
                 'los': self.los,
                 'env': self.env
-            }
+            }, indent=2,
         )
 
-    def make(self):
+    def __make(self):
 
         q = np.radians(self.env['initial_heading_angle'] % 360)
         eps = np.radians(self.env['initial_heading_error'] % 360)
         psi = np.radians(self.env['initial_psi'] % 360)
 
         if self.env['target_centered']:
+
             self.target['initial_state']['x'] = 0
             self.target['initial_state']['z'] = 0
-            self.target['initial_state']['psi'] = psi
-            self.missile['initial_state']['x'] = self.env['initial_distance'] * np.cos(psi)
-            self.missile['initial_state']['z'] = self.env['initial_distance'] * np.sin(psi)
-            self.missile['initial_state']['psi'] = psi + q + np.copysign(eps, np.pi / 2 - q)
+            self.target['initial_state']['psi'] = psi % (2 * np.pi)
+
+            self.missile['initial_state']['x'] = self.env['initial_distance'] * np.cos(psi + q - np.pi)
+            self.missile['initial_state']['z'] = self.env['initial_distance'] * np.sin(psi + q - np.pi)
+            self.missile['initial_state']['psi'] = (psi + q - eps) % (2 * np.pi)
+
         else:
+
             self.missile['initial_state']['x'] = 0
             self.missile['initial_state']['z'] = 0
-            self.missile['initial_state']['psi'] = psi
+            self.missile['initial_state']['psi'] = (psi - eps) % (2 * np.pi)
+
             self.target['initial_state']['x'] = self.env['initial_distance'] * np.cos(psi)
             self.target['initial_state']['z'] = self.env['initial_distance'] * np.sin(psi)
-            self.target['initial_state']['psi'] = psi + q + np.copysign(eps, np.pi / 2 - q)
+            self.target['initial_state']['psi'] = (psi - q) % (2 * np.pi)
 
         self.missile['initial_state'] = \
             np.radians(self.missile['initial_state'].pop('alpha')), \

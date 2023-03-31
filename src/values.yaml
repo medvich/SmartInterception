@@ -5,25 +5,28 @@
 
 ---
 environment:
-  altitude: 10000
+  tau: 0.1
+  altitude: 15000
   initial_distance: 20000
   initial_heading_error: 10
-  initial_heading_angle: 180
+  initial_heading_angle: 45
   target_centered: False
-  initial_psi: 0
+  initial_psi: 90
   bounds:
     termination_time: 150
-    simulation_zone_radius: 60000
+    simulation_zone_radius: 90000
     mach_range: [ 0.5, 7 ]
     initial_distance_range: [ 500, 40000 ]
     altitude_range: [ 200, 25000 ]
+    escape_sector_angle: 90
+    escape_distance: 90000
 missile:
   bounds:
     explosion_distance: 15
     lock_on_distance: 20000
     overload_max: 45
-    relative_velocity_min: 200
-    mach_range: [ 1.1, 7 ]
+    relative_velocity_min: 150
+    mach_range: [ 0.9, 7 ]
     coordinator_angle_max: 40
     beta_max: 30
   initial_state:

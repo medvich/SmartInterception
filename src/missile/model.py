@@ -13,7 +13,7 @@ class Missile2D:
         self.aerodynamics = Aerodynamics(options['aerodynamics'])
         self.energetics = Energetics(options['energetics'])
         self.bounds = options['bounds']
-        self._state, self.t, self.beta = None, None, None
+        self.t, self.beta, self._state = None, None, None
         self._overload = None
         self.status = 'Initialized'
 
@@ -21,10 +21,14 @@ class Missile2D:
         return f"{self.status}. Current state: {self._state}"
 
     def get_state(self):
-        return self._state
+        return self.t, self.beta, self._state
 
-    def set_state(self, state):
+    def set_state(self, state, **kw):
         self._state = state
+        if 't' in kw:
+            self.t = kw['t']
+        if 'beta' in kw:
+            self.beta = kw['beta']
 
     def reset(self):
         self.t = 0
@@ -41,7 +45,7 @@ class Missile2D:
         self._overload = self.aerodynamics.force_y(q, mach, self._initial_beta) / self.energetics.mass(self.t) / self.g
         self.beta = self._initial_beta
         self.status = 'Alive'
-        return self.t, self._state
+        return self._state
 
     def step(self, beta):
         assert self._state is not None, 'Call reset before using this method.'
@@ -49,13 +53,14 @@ class Missile2D:
         thrust, mass = self.energetics.thrust(self.t), self.energetics.mass(self.t)
         mach = vel / self.sOs
         q = self.dens * vel ** 2 / 2
-        beta = min(beta, self.bounds['beta_max'])
+        beta = np.copysign(min(abs(beta), self.bounds['beta_max']), beta)
         force_x = self.aerodynamics.force_x(q, mach, beta)
         force_z = self.aerodynamics.force_y(q, mach, beta)
         self._overload = force_z / mass / self.g
         k = self._overload / self.bounds['overload_max']
         if k > 1:
             beta *= k
+        self.beta = beta
         return np.array([
             vel * np.cos(psi),
             vel * np.sin(psi),
@@ -63,22 +68,22 @@ class Missile2D:
             (thrust * np.cos(self.alpha) * np.sin(beta) - force_z) / mass / vel
         ], copy=False, dtype=np.float32)
 
-    def _terminal(self):
+    def terminal(self):
         x, z, vel, psi = self._state
         mach = vel / self.sOs
-        if not (min(self.bounds['mach_range']) < mach > max(self.bounds['mach_range'])):
+        if not (min(self.bounds['mach_range']) < mach < max(self.bounds['mach_range'])):
             self.status = 'Out of Ma bounds'
-            return True, f"{self.status}. Ma = {round(mach, 2)}"
+            return True, f"{self.status}. Ma = {mach:.2f}"
         return False, None
 
     def get_required_beta(self, d_psi):
         x, z, vel, psi = self._state
-        area = self.aerodynamics.wing.area
+        area = self.aerodynamics.wing['area']
         mach = vel / self.sOs
         thrust, mass = self.energetics.thrust(self.t), self.energetics.mass(self.t)
 
         return np.radians(
-            -mass * vel * d_psi
+            mass * vel * d_psi
             / (-thrust / 57.3 * np.cos(self.alpha) + self.aerodynamics.cyA(mach) * self.dens * vel ** 2 / 2 * area)
         )
 
