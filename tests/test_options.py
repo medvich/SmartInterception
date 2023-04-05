@@ -4,9 +4,10 @@
 
 import pytest
 import numpy as np
-from src.options import Options, CURRENT_PATH
+from src.options import Options, BASE_PATH
 import os
 import yaml
+
 
 VALUES_FILENAME = 'values.yaml'
 
@@ -25,7 +26,7 @@ VALUES_FILENAME = 'values.yaml'
     ]
 )
 def test_target_centered_initial_state(distance, eps, q, psi, xM, zM, psiM):
-    with open(os.path.join(CURRENT_PATH, 'src', VALUES_FILENAME)) as f:
+    with open(os.path.join(BASE_PATH, 'src', VALUES_FILENAME)) as f:
         values = yaml.safe_load(f)
     values['environment']['initial_distance'] = distance
     values['environment']['initial_heading_error'] = eps
@@ -52,7 +53,7 @@ def test_target_centered_initial_state(distance, eps, q, psi, xM, zM, psiM):
     ]
 )
 def test_missile_centered_initial_state(distance, eps, q, psi, xT, zT, psiT, psiM):
-    with open(os.path.join(CURRENT_PATH, 'src', VALUES_FILENAME)) as f:
+    with open(os.path.join(BASE_PATH, 'src', VALUES_FILENAME)) as f:
         values = yaml.safe_load(f)
     values['environment']['initial_distance'] = distance
     values['environment']['initial_heading_error'] = eps
@@ -62,9 +63,9 @@ def test_missile_centered_initial_state(distance, eps, q, psi, xT, zT, psiT, psi
 
     opts = Options(values)
 
-    assert xT == pytest.approx(opts.target['initial_state']['x'], abs=0.1)
-    assert zT == pytest.approx(opts.target['initial_state']['z'], abs=0.1)
-    assert psiT == pytest.approx(opts.target['initial_state']['psi'], abs=0.1)
+    assert xT == pytest.approx(opts.target['initial_state'][1]['x'], abs=0.1)
+    assert zT == pytest.approx(opts.target['initial_state'][1]['z'], abs=0.1)
+    assert psiT == pytest.approx(opts.target['initial_state'][1]['psi'], abs=0.1)
     assert psiM == pytest.approx(opts.missile['initial_state'][2]['psi'], abs=0.1)
 
 

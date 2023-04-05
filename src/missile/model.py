@@ -87,5 +87,6 @@ class Missile2D:
             / (-thrust / 57.3 * np.cos(self.alpha) + self.aerodynamics.cyA(mach) * self.dens * vel ** 2 / 2 * area)
         )
 
+    @property
     def overload(self):
         return self._overload

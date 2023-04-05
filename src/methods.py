@@ -1,6 +1,4 @@
 import numpy as np
-from easyvec import Vec2
-from env2d import LineOfSight2D
 from collections import namedtuple
 
 

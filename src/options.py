@@ -4,8 +4,18 @@ import numpy as np
 import yaml
 import os
 import json
+from collections import namedtuple
+from pathlib import Path
+from copy import deepcopy
 
-CURRENT_PATH = os.getcwd()
+
+Acceleration = namedtuple('acceleration', ['x', 'z'])
+
+BASE_PATH = Path(os.getcwd())
+for _ in range(len(BASE_PATH.parents) + 1):
+    if os.path.basename(BASE_PATH) == 'SmartInterception':
+        break
+    BASE_PATH = BASE_PATH.parents[0]
 
 
 @dataclass
@@ -18,13 +28,17 @@ class Options:
         """
 
         if type(values) is str:
-            with open(os.path.join(CURRENT_PATH, values)) as f:
+            with open(os.path.join(BASE_PATH, 'src', values)) as f:
                 values = yaml.safe_load(f)
+        else:
+            values = deepcopy(values)
 
         self.missile = values['missile']
         self.target = values['target']
         self.los = {'initial_state': {}, 'bounds': {}}
         self.env = values['environment']
+
+        del values
 
         self.__make()
 
@@ -69,16 +83,25 @@ class Options:
             np.radians(self.missile['initial_state'].pop('beta')), \
             self.missile['initial_state']
 
-        self.missile['altitude'] = self.env['altitude']
-        self.target['altitude'] = self.env['altitude']
+        self.target['initial_state'] = \
+            Acceleration(
+                self.target['initial_state'].pop('acceleration_x'),
+                self.target['initial_state'].pop('acceleration_z')
+            ), \
+            self.target['initial_state']
 
         self.los['initial_state']['r'] = self.env['initial_distance']
         self.los['initial_state']['chi'] = psi + q
+
+        self.missile['altitude'] = self.env['altitude']
+        self.target['altitude'] = self.env['altitude']
 
         self.los['bounds']['explosion_distance'] = self.missile['bounds']['explosion_distance']
 
         self.env['initial_heading_error'] *= np.pi / 180
         self.env['initial_heading_angle'] *= np.pi / 180
+        self.env['bounds']['escape_sector_angle'] *= np.pi / 180
+
         self.missile['bounds']['coordinator_angle_max'] *= np.pi / 180
         self.missile['bounds']['beta_max'] *= np.pi / 180
         self.target['bounds']['coordinator_angle_max'] *= np.pi / 180

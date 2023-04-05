@@ -1,6 +1,8 @@
 from dataclasses import dataclass, InitVar
 import numpy as np
 import pandas as pd
+import os
+from ..options import BASE_PATH
 
 
 @dataclass
@@ -8,8 +10,8 @@ class Aerodynamics:
     options: InitVar[dict]
 
     def __post_init__(self, options):
-        self._cx0_points = pd.read_csv(options['cx0_filepath'], sep=';')
-        self._cyA_points = pd.read_csv(options['cyA_filepath'], sep=';')
+        self._cx0_points = pd.read_csv(os.path.join(BASE_PATH, 'src', 'missile', 'files', options['cx0_filename']), sep=';')
+        self._cyA_points = pd.read_csv(os.path.join(BASE_PATH, 'src', 'missile', 'files', options['cyA_filename']), sep=';')
         self.wing = options['wing']
 
     def cx0(self, mach):

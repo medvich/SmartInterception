@@ -1,21 +1,20 @@
 import numpy as np
-from missile import Missile2D
-from target import Target2D
-from options import Options
+from ..missile import Missile2D
+from ..target import Target2D
+from ..options import Options, Acceleration
 from gym import Env
 from ambiance import Atmosphere
-from gym.spaces import Box, Dict
+from gym.spaces import Box
 from easyvec import Vec2
-import os
-from collections import namedtuple
-
-
-CURRENT_PATH = os.getcwd()
+import pandas as pd
+from ..visualization import PlotlyRenderer
+from ..methods import PN
+from typing import Union
 
 
 class Interception2D(Env):
 
-    def __init__(self, values):
+    def __init__(self, agent: Union[str, None], **kw):
 
         # Устанавливается, что обучаемый агент может наблюдать следующие параметры своего окружения:
         #   - Дальность до цели
@@ -29,16 +28,27 @@ class Interception2D(Env):
         #   - Собственная масса
         #   - Высота полета
 
+        if 'values' in kw:
+            assert 'scenarios' not in kw
+            values = kw['values']
+        else:
+            assert 'scenarios' in kw
+            assert isinstance(kw['scenarios'], list)
+            self._scenarios = kw['scenarios']
+            values = self._scenarios.pop()
+
+        if agent not in ('missile', 'target', 'both', None):
+            raise ValueError('Invalid agent')
+        self.agent = agent
+
         self.options = Options(values)
 
         self.sOs = float(Atmosphere(self.options.env['altitude']).speed_of_sound)
         self.g = float(Atmosphere(self.options.env['altitude']).grav_accel)
 
-        self.Acceleration = namedtuple('acceleration', ['x', 'z'])
-
         high = np.array(
             [
-                max(self.options.env['bounds']['initial_distance_range']),
+                max(self.options.env['bounds']['initial_distance_range']) + 1e3,
                 self.options.target['bounds']['overload_max'],
                 self.options.missile['bounds']['overload_max'],
                 max(self.options.target['bounds']['mach_range']),
@@ -53,7 +63,7 @@ class Interception2D(Env):
         )
         low = np.array(
             [
-                -300,
+                0,
                 -self.options.target['bounds']['overload_max'],
                 -self.options.missile['bounds']['overload_max'],
                 min(self.options.target['bounds']['mach_range']),
@@ -76,7 +86,7 @@ class Interception2D(Env):
                 self.options.env['initial_distance'],
                 0,
                 0,
-                self.options.target['initial_state']['vel'] / self.sOs,
+                self.options.target['initial_state'][1]['vel'] / self.sOs,
                 self.options.missile['initial_state'][2]['vel'] / self.sOs,
                 0,
                 self.options.env['initial_heading_error'],
@@ -87,81 +97,117 @@ class Interception2D(Env):
             dtype=np.float32
         )
 
-        spaces = {
-            'beta': Box(
-                low=-self.options.missile['bounds']['beta_max'],
-                high=self.options.missile['bounds']['beta_max'],
-                shape=(1, ),
-                dtype=np.float32
-            ),
-            'acceleration': Box(
-                low=-self.options.target['bounds']['overload_max'] * self.g,
-                high=self.options.target['bounds']['overload_max'] * self.g,
-                shape=(1, ),
-                dtype=np.float32
-            ),
-        }
-
-        self.action_space = Dict(spaces)
+        self.action_space = Box(low=-1, high=1, shape=(1, ), dtype=np.float32)
 
         self.state = None
         self.t = None
-        self.reward = None
         self.log = None
         self.status = 'Initialized'
+        self._info = None
         self.buffer = None
         self._locked_on = None
+        self._keys = None
+        self.pn = None
+        self._missile_action, self._target_action = None, None
 
-    def normalize_state(self, state):
+    def normalize_state(self, state: np.ndarray) -> np.ndarray:
         return (state - self.observation_space.low) / (self.observation_space.high - self.observation_space.low)
 
-    def denormalize_state(self, state):
+    def denormalize_state(self, state: np.ndarray) -> np.ndarray:
         return self.observation_space.low + state * (self.observation_space.high - self.observation_space.low)
 
-    def normalize_beta(self, beta):
-        return (beta - self.action_space['beta'].low) / (self.action_space['beta'].high - self.action_space['beta'].low)
-
-    def denormalize_beta(self, beta):
-        return self.action_space['beta'].low + beta * (self.action_space['beta'].high - self.action_space['beta'].low)
-
-    def normalize_acceleration(self, acceleration):
-        return (acceleration - self.action_space['acceleration'].low) / \
-               (self.action_space['acceleration'].high - self.action_space['acceleration'].low)
-
-    def denormalize_acceleration(self, acceleration):
-        return self.action_space['acceleration'].low + acceleration * \
-               (self.action_space['acceleration'].high - self.action_space['acceleration'].low)
-
     def reset(self):
+        if self._scenarios and self.status != 'Initialized':
+            values = np.random.choice(self._scenarios)
+            self.options = Options(values)
+            self.missile = Missile2D(self.options.missile)
+            self.target = Target2D(self.options.target)
+            self.los = LineOfSight2D(self.options.los)
+            self._initial_state = np.array(
+                [
+                    self.options.env['initial_distance'],
+                    0,
+                    0,
+                    self.options.target['initial_state'][1]['vel'] / self.sOs,
+                    self.options.missile['initial_state'][2]['vel'] / self.sOs,
+                    0,
+                    self.options.env['initial_heading_error'],
+                    self.options.env['initial_heading_angle'],
+                    self.options.missile['energetics']['mass0'],
+                    self.options.env['altitude']
+                ],
+                dtype=np.float32
+            )
+
         self.t = 0
         missile_state = self.missile.reset()
         target_state = self.target.reset()
         self.los.set_state(missile=missile_state, target=target_state)
         los_state = self.los.get_state()
         self.state = self._initial_state
-        self.state[1] = self.target.overload()
-        self.state[2] = self.missile.overload()
+        self.state[1] = self.target.overload
+        self.state[2] = self.missile.overload
         self.state[5] = self.velR(missile_state, target_state, los_state)
 
+        self.pn = PN(0, self.options.env['altitude'])
+
+        self._keys = np.array(
+            ['t', 'distance', 'target_overload', 'missile_overload', 'target_Ma', 'missile_Ma', 'velR', 'eps', 'q',
+             'mass', 'altitude', 'missile_x', 'missile_z', 'missile_psi', 'missile_beta', 'target_x', 'target_z',
+             'target_psi', 'chi', 'target_acceleration_z', 'sOs'],
+            dtype=np.object
+        )
+
         log0 = np.concatenate([
-            [self.t],
+            np.array([self.t], dtype=np.float32),
             self.state,
             np.delete(missile_state, 2),
-            [self.missile.beta],
+            np.array([self.missile.beta], dtype=np.float32),
             np.delete(target_state, 2),
-            np.delete(los_state, 0)
-        ])
-        self.log = np.array([log0], dtype=np.object)
+            np.delete(los_state, 0),
+            np.array([self.target._acceleration.z, self.sOs], dtype=np.float32)
+        ], dtype=np.float32)
+        self.log = np.array([log0], dtype=np.float32)
 
         self.status = 'Dropped'
         self.buffer = {}
-        return self.t, self.state
+        return self.state
 
-    def step(self, action):
+    @property
+    def missile_action(self):
+        return self._missile_action
+
+    @missile_action.setter
+    def missile_action(self, action: float) -> None:
+        self._missile_action = action
+
+    @property
+    def target_action(self):
+        return self._target_action
+
+    @target_action.setter
+    def target_action(self, action: float) -> None:
+        self._target_action = action
+
+    def step(self, action: np.ndarray):
         assert self.state is not None, 'Call reset before using this method.'
 
-        beta = action['beta'][0]
-        aZ = action['acceleration'][0]
+        if self.agent == 'target':
+            beta = self.pn.get_action(self)
+            aZ = action * self.options.target['bounds']['overload_max'] * self.g
+        elif self.agent == 'missile':
+            assert self._target_action is not None, 'Set target action before it'
+            beta = action * self.options.missile['bounds']['beta_max']
+            aZ = self._target_action
+        elif self.agent == 'both':
+            assert self._missile_action is not None, 'Set missile action before it'
+            assert self._target_action is not None, 'Set target action before it'
+            beta = self._missile_action
+            aZ = self._target_action
+        else:
+            assert self._target_action is not None, 'Set target action before it'
+            beta = self.pn.get_action(self)
+            aZ = self._target_action
 
         tau = self.options.env['tau']
 
@@ -172,7 +218,7 @@ class Interception2D(Env):
         self.buffer['s'] = self.state
 
         missile_ds = self.missile.step(beta)
-        target_ds = self.target.step(self.Acceleration(0, aZ))
+        target_ds = self.target.step(Acceleration(0, aZ))
         los_ds = self.los.step(missile_state, target_state)
 
         missile_state = missile_state + tau * missile_ds
@@ -188,8 +234,8 @@ class Interception2D(Env):
         self.state = np.array(
             [
                 los_state[0],
-                self.target.overload(),
-                self.missile.overload(),
+                self.target.overload,
+                self.missile.overload,
                 target_state[2] / self.sOs,
                 missile_state[2] / self.sOs,
                 self.velR(missile_state, target_state, los_state),
@@ -204,21 +250,22 @@ class Interception2D(Env):
         self.buffer['s_'] = self.state
 
         appendix = np.concatenate([
-            [self.t],
+            np.array([self.t], dtype=np.float32),
             self.state,
             np.delete(missile_state, 2),
-            [self.missile.beta],
+            np.array([self.missile.beta], dtype=np.float32),
             np.delete(target_state, 2),
-            np.delete(los_state, 0)
-        ])
+            np.delete(los_state, 0),
+            np.array([self.target._acceleration.z, self.sOs], dtype=np.float32)
+        ], dtype=np.float32)
         self.log = np.append(self.log, [appendix], axis=0)
 
-        terminal, info = self._terminal()
+        terminal, self._info = self._terminal()
 
         if self.status != 'Alive':
             self.status = 'Alive'
 
-        return self.state, self.rewardM, terminal, info
+        return self.state, self.reward, terminal, {}
 
     def _terminal(self):
         _, _, _, _, _, velR, eta_m, eta_t, _, _ = self.state
@@ -328,24 +375,59 @@ class Interception2D(Env):
     def locked_on(self, value: bool) -> None:
         self._locked_on = value
 
-    def rewardM(self):
-        # if 'hit' in self.status.lower():
-        #     return 10
-        # if 'target' in self.status.lower():
-        #     return 5
-        # if 'missile' in self.status.lower():
-        #     return -10
-        # return 1 - self.buffer['s_'][0] / self.buffer['s'][0]
+    @property
+    def info(self):
+        return self._info
+
+    @property
+    def reward(self):
+        if self.agent in ('missile', 'both'):
+            return self.missile_reward
+        if self.agent == 'target':
+            return self.target_reward
         return None
 
-    def rewardT(self):
-        return None
+    @property
+    def missile_reward(self):
+        if 'hit' in self.status.lower():
+            return 10
+        if 'target' in self.status.lower():
+            return 5
+        if 'missile' in self.status.lower():
+            return -10
+        return 1 - self.buffer['s_'][0] / self.buffer['s'][0]
+
+    @property
+    def target_reward(self):
+        # k1 = self.t / 100
+        # k2 = abs(np.rad2deg(self.state[6]))
+        # k3 = self.state[0] / self.options.env['initial_distance']
+        # if 'escaped' in self.status.lower():
+        #     return 15
+        if 'missile' in self.status.lower():
+            return 20
+        if 'hit' in self.status.lower():
+            return -50
+        if 'target' in self.status.lower():
+            return -6
+        return -1 * (self.buffer['s'][0] / self.buffer['s_'][0] + self.buffer['s'][1] / self.buffer['s_'][1])
 
     def render(self, mode="human"):
         pass
 
-    def post_render(self, tab=1):
-        pass
+    def post_render(self, tab=1, renderer='notebook'):
+        data = {}
+        for i, k in enumerate(self._keys):
+            data[k] = self.log[:, i][::tab]
+        df = pd.DataFrame(data=data)
+        pr = PlotlyRenderer(df, self.options)
+
+        d = self.options.env['initial_distance']
+        q = int(np.rad2deg(self.options.env['initial_heading_angle']))
+        eps = int(np.rad2deg(self.options.env['initial_heading_error']))
+
+        filename_const = f"{d}-{q}-{eps}"
+        pr.plot(renderer, filename_const)
 
 
 class LineOfSight2D:

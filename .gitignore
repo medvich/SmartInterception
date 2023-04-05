@@ -2,7 +2,7 @@
 .idea/
 
 # Jupyter Notebook files
-src/.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
 
 # Pytest cache files
 .pytest_cache/
