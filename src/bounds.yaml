@@ -1,0 +1,33 @@
+# YAML Document starts with ---
+# Comments start with #
+
+# Параметры окружения и участников полета, их границы и диапазоны
+
+---
+environment:
+  termination_time: 150
+  simulation_zone_radius: 90000
+  mach_range: [ 0.5, 5.5 ]
+  initial_distance_range: [ 500, 80000 ]
+  altitude_range: [ 500, 20000 ]
+  escape_sector_angle: 50
+  escape_distance: 81000
+
+missile:
+  explosion_distance: &ref 15
+  lock_on_distance: 20000
+  overload_max: 50
+  relative_velocity_min: 200
+  mach_range: [ 0.8, 5.5 ]
+  coordinator_angle_max: 40
+  beta_max: 30
+  mass: [ 105, 165 ]
+
+target:
+  overload_max: 8
+  mach_range: [ 0.5, 2 ]
+  detection_distance_range: [ 3000, 40000 ]
+  coordinator_angle_max: 50
+
+los:
+  distance_min: *ref

@@ -35,7 +35,7 @@ def make_escape_scenarios(n=10_000, seed=None):
         else:
             raise ValueError('Wrong q value')
 
-        if d > values['missile']['bounds']['lock_on_distance'] * 1.25:
+        if d > 30000:
             eps = np.random.randint(-40, 40, dtype=np.int32)
         else:
             eps = np.random.randint(-20, 20, dtype=np.int32)

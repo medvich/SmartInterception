@@ -24,7 +24,7 @@ def k_foo_alternative(*args):
     vel, altitude, = args
     altitude_bounds = (0, 70e3)
     n_bounds = (0.05, 45)
-    vel_bounds = (250, 2000)
+    vel_bounds = (200, 1800)
     k_bounds = (2, 80)
     gamma = 8
     n = n_degree_curve(altitude, altitude_bounds, n_bounds, gamma, reverse=True)
