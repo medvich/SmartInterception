@@ -56,7 +56,7 @@ class PlotlyRenderer:
         fig.add_trace(go.Scatter(x=self.df.t, y=np.rad2deg(self.df.eps.to_numpy(dtype=np.float32)), marker=dict(color='purple'), name='missile angle error'),
                       row=3, col=3)
 
-        fig.add_trace(go.Scatter(x=self.df.t, y=self.df.distance, marker=dict(color='red'), name='distance'),
+        fig.add_trace(go.Scatter(x=self.df.t, y=self.df.ZEM, marker=dict(color='red'), name='ZEM'),
                       row=1, col=4)
 
         fig.add_trace(go.Scatter(x=self.df.t, y=self.df.missile_overload, marker=dict(color='red'), name='missile overload'),

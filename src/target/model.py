@@ -12,6 +12,7 @@ class Target2D:
         self._overload = None
         self.status = 'Initialized'
         self._acceleration = None
+        self._prev_acceleration = None
 
     def __str__(self):
         return f"{self.status}. Current state: {self._state}"
@@ -37,14 +38,18 @@ class Target2D:
         self._overload = 0
         self.status = 'Alive'
         self._acceleration = self._initial_acceleration
+        self._prev_acceleration = self._initial_acceleration
         return self._state
 
     def step(self, acceleration):
         assert ('x' and 'z') in acceleration._fields, 'Acceleration must be a namedtuple with x and z fields'
         assert self._state is not None, 'Call reset before using this method.'
-        self._acceleration = acceleration
+        diff_z = acceleration.z - self._prev_acceleration.z
+        new_aZ = self._prev_acceleration.z + np.copysign(min(abs(diff_z), 9), diff_z)
+        self._acceleration = acceleration._replace(z=new_aZ)
         x, z, vel, psi = self._state
-        self._overload = acceleration.z / self.g
+        self._overload = self._acceleration.z / self.g
+        self._prev_acceleration = self._acceleration
         return np.array([
             vel * np.cos(psi),
             vel * np.sin(psi),

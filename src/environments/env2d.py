@@ -55,7 +55,7 @@ class Interception2D(Env):
                 max(self.options.missile['bounds']['mach_range']),
                 (max(self.options.missile['bounds']['mach_range']) + max(self.options.target['bounds']['mach_range'])) * self.sOs,
                 self.options.missile['bounds']['coordinator_angle_max'],
-                2 * np.pi,
+                np.pi,
                 self.options.missile['energetics']['mass0'],
                 max(self.options.env['bounds']['altitude_range'])
             ],
@@ -68,9 +68,9 @@ class Interception2D(Env):
                 -self.options.missile['bounds']['overload_max'],
                 min(self.options.target['bounds']['mach_range']),
                 min(self.options.missile['bounds']['mach_range']),
-                self.options.missile['bounds']['relative_velocity_min'],
+                self.options.missile['initial_state'][2]['vel'] - self.options.target['initial_state'][1]['vel'],
                 -self.options.missile['bounds']['coordinator_angle_max'],
-                -2 * np.pi,
+                -np.pi,
                 self.options.missile['energetics']['mass0'] - self.options.missile['energetics']['omega0'],
                 min(self.options.env['bounds']['altitude_range'])
             ],
@@ -154,7 +154,7 @@ class Interception2D(Env):
         self._keys = np.array(
             ['t', 'distance', 'target_overload', 'missile_overload', 'target_Ma', 'missile_Ma', 'velR', 'eps', 'q',
              'mass', 'altitude', 'missile_x', 'missile_z', 'missile_psi', 'missile_beta', 'target_x', 'target_z',
-             'target_psi', 'chi', 'target_acceleration_z', 'sOs'],
+             'target_psi', 'chi', 'target_acceleration_z', 'sOs', 'ZEM'],
             dtype=np.object
         )
 
@@ -165,13 +165,19 @@ class Interception2D(Env):
             np.array([self.missile.beta], dtype=np.float32),
             np.delete(target_state, 2),
             np.delete(los_state, 0),
-            np.array([self.target._acceleration.z, self.sOs], dtype=np.float32)
+            np.array([self.target._acceleration.z, self.sOs, self.ZEM], dtype=np.float32)
         ], dtype=np.float32)
         self.log = np.array([log0], dtype=np.float32)
 
         self.status = 'Dropped'
-        self.buffer = {}
-        return self.state
+        self.buffer = {
+            's': self.state,
+            's_': self.state,
+            'ZEM': self.ZEM,
+            'ZEM_': self.ZEM
+        }
+
+        return self.normalize_state(self.state)
 
     @property
     def missile_action(self):
@@ -188,6 +194,16 @@ class Interception2D(Env):
     @target_action.setter
     def target_action(self, action: float) -> None:
         self._target_action = action
+
+    @property
+    def ZEM(self):
+        """
+        Нулевой промах ракеты (Zero-effort-miss)
+        """
+        _, _, missile_state = self.missile.get_state()
+        los_state = self.los.get_state()
+        distance = self.state[0]
+        return distance * self.get_eta(missile_state, los_state)
 
     def step(self, action: np.ndarray):
         assert self.state is not None, 'Call reset before using this method.'
@@ -216,6 +232,7 @@ class Interception2D(Env):
         los_state = self.los.get_state()
 
         self.buffer['s'] = self.state
+        self.buffer['ZEM'] = self.ZEM
 
         missile_ds = self.missile.step(beta)
         target_ds = self.target.step(Acceleration(0, aZ))
@@ -248,6 +265,7 @@ class Interception2D(Env):
         )
 
         self.buffer['s_'] = self.state
+        self.buffer['ZEM_'] = self.ZEM
 
         appendix = np.concatenate([
             np.array([self.t], dtype=np.float32),
@@ -256,18 +274,17 @@ class Interception2D(Env):
             np.array([self.missile.beta], dtype=np.float32),
             np.delete(target_state, 2),
             np.delete(los_state, 0),
-            np.array([self.target._acceleration.z, self.sOs], dtype=np.float32)
+            np.array([self.target._acceleration.z, self.sOs, self.ZEM], dtype=np.float32)
         ], dtype=np.float32)
         self.log = np.append(self.log, [appendix], axis=0)
-
-        terminal, self._info = self._terminal()
 
         if self.status != 'Alive':
             self.status = 'Alive'
 
-        return self.state, self.reward, terminal, {}
+        return self.normalize_state(self.state), self.reward, self.terminal, {}
 
-    def _terminal(self):
+    @property
+    def terminal(self):
         _, _, _, _, _, velR, eta_m, eta_t, _, _ = self.state
         _, target_state = self.target.get_state()
         missile_terminal, missile_info = self.missile.terminal()
@@ -279,39 +296,39 @@ class Interception2D(Env):
                     and self.missile.energetics.thrust(self.t) == 0:
                 self.missile.status = 'Low relative velocity'
                 self.status = f"MISSILE: {self.missile.status}. Vel_ = {velR:.2f} m/sec"
-                return True, self.status
+                return True
 
             self.status = "LOS: " + los_info
-            return los_terminal, self.status
+            return los_terminal
 
         if target_terminal:
             self.status = "TARGET: " + target_info
-            return target_terminal, self.status
+            return target_terminal
 
         escaped, d_, zA_ = self._escaped(target_state)
 
         if escaped:
             self.target.status = 'Escaped'
             self.status = f"TARGET: {self.target.status}. D_ = {d_:.2f} m, Zone_Angle = {np.rad2deg(zA_):.2f} grad"
-            return True, self.status
+            return True
 
         if missile_terminal:
             self.status = "MISSILE: " + missile_info
-            return missile_terminal, self.status
+            return missile_terminal
 
         if self._locked_on:
 
             if abs(eta_m) > self.options.missile['bounds']['coordinator_angle_max']:
                 self.missile.status = 'Target  lost'
                 self.status = f"MISSILE: {self.missile.status}. Eps = {abs(np.rad2deg(eta_m)):.2f} grad"
-                return True, self.status
+                return True
 
         if self.t > self.options.env['bounds']['termination_time']:
             self.status = f"ENV: Maximum flight time exceeded. t = {self.t:.2f} sec"
-            return True, self.status
+            return True
 
         else:
-            return False, None
+            return False
 
     def velR(self, combatant1_state, combatant2_state, los_state):
         """
@@ -389,28 +406,13 @@ class Interception2D(Env):
 
     @property
     def missile_reward(self):
-        if 'hit' in self.status.lower():
-            return 10
-        if 'target' in self.status.lower():
-            return 5
-        if 'missile' in self.status.lower():
-            return -10
-        return 1 - self.buffer['s_'][0] / self.buffer['s'][0]
+        return 0
 
     @property
     def target_reward(self):
-        # k1 = self.t / 100
-        # k2 = abs(np.rad2deg(self.state[6]))
-        # k3 = self.state[0] / self.options.env['initial_distance']
-        # if 'escaped' in self.status.lower():
-        #     return 15
-        if 'missile' in self.status.lower():
-            return 20
-        if 'hit' in self.status.lower():
-            return -50
-        if 'target' in self.status.lower():
-            return -6
-        return -1 * (self.buffer['s'][0] / self.buffer['s_'][0] + self.buffer['s'][1] / self.buffer['s_'][1])
+        if self.buffer:
+            return 1 if self.buffer['ZEM_'] > self.buffer['ZEM'] else -1
+        return 0
 
     def render(self, mode="human"):
         pass
