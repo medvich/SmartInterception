@@ -28,6 +28,7 @@ target:
   mach_range: [ 0.5, 2 ]
   detection_distance_range: [ 3000, 40000 ]
   coordinator_angle_max: 50
+  acceleration_z_step_max: 10
 
 los:
   distance_min: *ref

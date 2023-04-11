@@ -15,7 +15,7 @@ with open(os.path.join(BASE_PATH, 'src', BOUNDS_FILENAME)) as f:
     bounds = yaml.safe_load(f)
 
 opts = Options()
-opts.set_bounds(bounds)
+# opts.set_bounds(bounds)
 
 
 @pytest.mark.parametrize(

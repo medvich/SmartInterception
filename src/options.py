@@ -12,11 +12,15 @@ from ambiance import Atmosphere
 
 Acceleration = namedtuple('acceleration', ['x', 'z'])
 
+CartPoint = namedtuple('point', ['x', 'z'])
+PolPoint = namedtuple('point', ['r', 'theta'])
+
 BASE_PATH = Path(os.getcwd())
 for _ in range(len(BASE_PATH.parents) + 1):
     if os.path.basename(BASE_PATH) == 'SmartInterception':
         break
     BASE_PATH = BASE_PATH.parents[0]
+LOG_PATH = os.path.join(BASE_PATH, 'files', 'logs')
 
 
 @dataclass
