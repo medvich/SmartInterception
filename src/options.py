@@ -1,12 +1,9 @@
-from dataclasses import dataclass, InitVar
-from typing import Union
+from dataclasses import dataclass
 import numpy as np
-import yaml
 import os
 import json
 from collections import namedtuple
 from pathlib import Path
-from copy import deepcopy
 from ambiance import Atmosphere
 
 
@@ -21,6 +18,7 @@ for _ in range(len(BASE_PATH.parents) + 1):
         break
     BASE_PATH = BASE_PATH.parents[0]
 LOG_PATH = os.path.join(BASE_PATH, 'files', 'logs')
+STUDY_PATH = os.path.join(BASE_PATH, 'files', 'studies')
 
 
 @dataclass

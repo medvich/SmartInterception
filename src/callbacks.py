@@ -1,63 +1,78 @@
 from stable_baselines3.common.callbacks import BaseCallback
-import numpy as np
+from stable_baselines3.common.vec_env import SubprocVecEnv
+import optuna
+from statistics import mean
 
 
 class SubprocVecEnvCallback(BaseCallback):
-
-    def __init__(self, env, verbose=0):
+    """
+    Callback used for evaluating and reporting a SPVEnv
+    """
+    def __init__(
+            self,
+            env: SubprocVecEnv,
+            verbose=0
+    ):
         super().__init__(verbose)
 
         self.env = env
         self.buffer = {}
 
         n_envs = len(self.env.remotes)
-        self.relations = np.repeat(0, n_envs)
 
-        for i, _ in enumerate(self.relations):
+        for i in range(n_envs):
             self.buffer[f'env_{i}'] = {
-                'positive': 0,
-                'negative': 0,
-                'relation': 0,
                 'sum': 0,
                 'steps': 0,
-                'norm_reward': 0
+                'mean_terminal_distance': 0
             }
 
     def _on_step(self) -> bool:
         rewards = self.env.get_attr('reward')
+        histories = self.env.get_attr('history')
 
-        for i, value in enumerate(rewards):
+        for i, (r, h) in enumerate(zip(rewards, histories)):
+
             self.buffer[f'env_{i}']['steps'] += 1
-            self.buffer[f'env_{i}']['sum'] += value
-            try:
-                self.buffer[f'env_{i}']['norm_reward'] = \
-                    self.buffer[f'env_{i}']['sum'] / self.buffer[f'env_{i}']['steps']
-            except ZeroDivisionError:
-                self.buffer[f'env_{i}']['norm_reward'] = 0
-            if value > 0:
-                self.buffer[f'env_{i}']['positive'] += 1
-            elif value < 0:
-                self.buffer[f'env_{i}']['negative'] += 1
-            else:
-                pass
-            try:
-                self.buffer[f'env_{i}']['relation'] = \
-                    self.buffer[f'env_{i}']['positive'] / self.buffer[f'env_{i}']['negative']
-            except ZeroDivisionError:
-                self.buffer[f'env_{i}']['relation'] = self.buffer[f'env_{i}']['positive']
-            self.logger.record(f'Pos-Neg-Relation/env_{i}', self.buffer[f'env_{i}']['relation'])
-            self.logger.record(f'Normalized-Reward/env_{i}', self.buffer[f'env_{i}']['norm_reward'])
+            self.buffer[f'env_{i}']['sum'] += r
+            self.buffer[f'env_{i}']['mean_terminal_distance'] = \
+                mean(h['terminal_distance']) if h['terminal_distance'] else 0
+
+            # self.logger.record(f'sum_reward/env_{i}', self.buffer[f'env_{i}']['sum'])
+            # self.logger.record(f'reward/env_{i}', r)
+            self.logger.record(f'mean_dt/env_{i}', self.buffer[f'env_{i}']['mean_terminal_distance'])
 
         return True
 
-    def _on_training_end(self) -> bool:
-        for i, _ in enumerate(self.relations):
-            self.buffer[f'env_{i}'] = {
-                'positive': 0,
-                'negative': 0,
-                'relation': 0,
-                'sum': 0,
-                'steps': 0,
-                'norm_reward': 0
-            }
+
+class TrialSPVECallback(BaseCallback):
+    """
+    Callback used for reporting a trial
+    """
+    def __init__(
+        self,
+        env: SubprocVecEnv,
+        trial: optuna.Trial,
+        verbose: int = 0,
+    ):
+        super().__init__(verbose=verbose)
+        self.env = env
+        self.trial = trial
+        self.is_pruned = False
+        self.step = 0
+        self.intermediate_value = []
+
+    def _on_step(self) -> bool:
+        self.step += 1
+        histories = self.env.get_attr('history')
+        for i, value in enumerate(histories):
+            if value['terminal_distance']:
+                self.intermediate_value.append(mean(value['terminal_distance']))
+        self.trial.report(
+            mean(self.intermediate_value) if self.intermediate_value else 0,
+            step=self.step
+        )
+        if self.trial.should_prune():
+            self.is_pruned = True
+            return False
         return True

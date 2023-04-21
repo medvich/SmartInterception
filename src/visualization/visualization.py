@@ -97,7 +97,10 @@ class PlotlyRenderer:
 
         escape_distance = self.options.env['bounds']['escape_distance']
         escape_sector_angle = self.options.env['bounds']['escape_sector_angle']
-        direction_angle = self.options.missile['initial_state'][2]['psi'] + self.df.iloc[0].eps
+        if self.options.env['target_centered']:
+            direction_angle = self.options.missile['initial_state'][2]['psi']
+        else:
+            direction_angle = self.options.missile['initial_state'][2]['psi'] + self.df.iloc[0].eps
         missile_initial_x = self.options.missile['initial_state'][2]['x']
         missile_initial_z = self.options.missile['initial_state'][2]['z']
 

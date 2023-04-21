@@ -6,6 +6,7 @@ from typing import Union
 from .options import Options
 import matplotlib.pyplot as plt
 import pandas as pd
+from .common import n_degree_curve
 
 
 VALUES_FILENAME = 'values.yaml'
@@ -165,8 +166,8 @@ def plot_scenarios(scenarios, params) -> None:
         )
         ax.fill_between(
             np.linspace(
-                -np.pi + np.radians(min(params['bounds']['q'])),
-                -np.pi + np.radians(max(params['bounds']['q'])),
+                -np.pi + np.radians(min(params['bounds']['q']) + params['params']['initial_psi']),
+                -np.pi + np.radians(max(params['bounds']['q']) + params['params']['initial_psi']),
                 100),
             min(params['bounds']['distance']),
             max(params['bounds']['distance']),
@@ -224,3 +225,38 @@ def plot_scenarios(scenarios, params) -> None:
     plt.grid(c='lightgray')
     plt.show()
 
+
+def make_scenario_batches(
+        zones,
+        target_centered: bool = False,
+        plot: bool = False,
+        seed: int = 1000
+):
+    scenario_batches = []
+    for zone in zones:
+        eps_max = n_degree_curve(zone['d_max'], (0, 80000), (0, 40), 1)
+        scenarios, params = make_escape_scenarios(
+            n=zone['n'],
+            seed=seed,
+            target_centered=target_centered,
+            d_min=zone['d_min'],
+            d_max=zone['d_max'],
+            q_min=zone['q_min'],
+            q_max=zone['q_max'],
+            eps_min=-eps_max,
+            eps_max=eps_max
+        )
+        if plot:
+            plot_scenarios(scenarios, params)
+        scenario_batches.append(scenarios)
+    return scenario_batches
+
+
+train_zones = [
+    {'d_min': 20000,
+     'd_max': 80000,
+     'q_min': 0,
+     'q_max': 180,
+     'n': 200
+     }
+]
