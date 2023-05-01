@@ -527,7 +527,7 @@ class PlotlyRenderer:
                         go.Pie(
                             title='time usage [sec]',
                             labels=['1', '2'],
-                            values=[self.df.iloc[i].t, 100 - self.df.iloc[i].t],
+                            values=[self.df.iloc[i].t, 150 - self.df.iloc[i].t],
                             hole=0.85,
                             textinfo='none',
                             marker=dict(colors=['rgb(113,209,145)', 'rgb(240,240,240)']),

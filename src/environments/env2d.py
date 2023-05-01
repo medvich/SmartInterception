@@ -22,10 +22,8 @@ DEFAULT_TARGET_REWARD_PARAMS = {
 }
 
 DEFAULT_MISSILE_REWARD_PARAMS = {
-    'cHit': 146,
-    'cMiss': -135,
-    'cPos': 1,
-    'cNeg': -1
+    'cHit': 300,
+    'cMiss': -237
 }
 
 with open(os.path.join(BASE_PATH, 'src', 'bounds.yaml')) as file:
@@ -76,7 +74,7 @@ class Interception2D(Env):
         else:
             self.target_model = None
 
-        # Функция, возвращающая ваэность вознаграждения в зависимости от дальности и ракурса
+        # Функция, возвращающая важность вознаграждения в зависимости от дальности и ракурса
 
         i_path = os.path.join(BASE_PATH, 'files', 'importance.pkl')
         assert os.path.exists(i_path), 'Importance file does not exist'
@@ -100,8 +98,15 @@ class Interception2D(Env):
         # Создадим словарь с историей моделирований, чтобы иметь возможность оценить тренд по какой-либо величине
 
         self.history = {
-            'terminal_distance': []
+            'terminal_distance': [],
+            'hits_count': 0,
+            'misses_count': 0,
+            'n_episodes': 0
         }
+
+        # Инициализируем options и положим в них bounds для наших экземпляров
+        self.options = Options()
+        self.options.set_bounds(self._bounds)
 
         """
         Устанавливается, что обучаемый агент может наблюдать следующие параметры своего окружения:
@@ -120,33 +125,33 @@ class Interception2D(Env):
 
         high = np.array(
             [
-                self._bounds['environment']['simulation_zone_radius'],
-                1,
-                self._bounds['target']['overload_max'],
-                self._bounds['missile']['overload_max'],
-                max(self._bounds['target']['mach_range']),
-                max(self._bounds['missile']['mach_range']),
+                self.options.env['bounds']['simulation_zone_radius'],
+                np.pi / 2,
+                self.options.target['bounds']['overload_max'],
+                self.options.missile['bounds']['overload_max'],
+                max(self.options.target['bounds']['mach_range']),
+                max(self.options.missile['bounds']['mach_range']),
                 2_000,
-                self._bounds['missile']['coordinator_angle_max'],
+                self.options.missile['bounds']['coordinator_angle_max'],
                 np.pi,
-                max(self._bounds['missile']['mass']),
-                max(self._bounds['environment']['altitude_range'])
+                max(self.options.missile['bounds']['mass']),
+                max(self.options.env['bounds']['altitude_range'])
             ],
             dtype=np.float32
         )
         low = np.array(
             [
-                -100,
-                -1,
-                -1 * self._bounds['target']['overload_max'],
-                -1 * self._bounds['missile']['overload_max'],
-                min(self._bounds['target']['mach_range']),
-                min(self._bounds['missile']['mach_range']),
-                self._bounds['missile']['relative_velocity_min'],
-                -1 * self._bounds['missile']['coordinator_angle_max'],
+                -300,
+                -np.pi / 2,
+                -1 * self.options.target['bounds']['overload_max'],
+                -1 * self.options.missile['bounds']['overload_max'],
+                min(self.options.target['bounds']['mach_range']),
+                min(self.options.missile['bounds']['mach_range']),
+                self.options.missile['bounds']['relative_velocity_min'],
+                -1 * self.options.missile['bounds']['coordinator_angle_max'],
                 -np.pi,
-                min(self._bounds['missile']['mass']),
-                min(self._bounds['environment']['altitude_range'])
+                min(self.options.missile['bounds']['mass']),
+                min(self.options.env['bounds']['altitude_range'])
             ],
             dtype=np.float32
         )
@@ -166,10 +171,6 @@ class Interception2D(Env):
 
         self.status = 'Initialized'
         self.info = None
-
-        # Инициализируем options и положим в них bounds для наших экземпляров
-        self.options = Options()
-        self.options.set_bounds(self._bounds)
 
         self.t, self._obs = None, None
         if self.agent in (['both', 'target', None]):
@@ -213,8 +214,8 @@ class Interception2D(Env):
             )
         elif self.agent == 'missile':
             self.original_action_space = Box(
-                low=-self.options.missile['bounds']['beta_max'],
-                high=self.options.missile['bounds']['beta_max'],
+                low=1,
+                high=80,
                 shape=(1,),
                 dtype=np.float32
             )
@@ -226,8 +227,8 @@ class Interception2D(Env):
                 dtype=np.float32
             )
             self.missile_original_action_space = Box(
-                low=-self.options.missile['bounds']['beta_max'],
-                high=self.options.missile['bounds']['beta_max'],
+                low=1,
+                high=80,
                 shape=(1,),
                 dtype=np.float32
             )
@@ -276,6 +277,7 @@ class Interception2D(Env):
 
         self.status = 'Dropped'
         self.buffer = {
+            'd0': self._obs[0],
             'd': self._obs[0],
             'd_': self._obs[0]
         }
@@ -326,10 +328,8 @@ class Interception2D(Env):
         elif self.agent == 'both':
             # assert self._missile_action is not None, 'Set missile action before it'
             # assert self._target_action is not None, 'Set target action before it'
-            if self._locked_on:
-                beta = self.rescale_action(action, agent='missile')[0]
-            else:
-                beta = self.pn.get_action()
+            K = self.rescale_action(action, agent='missile')[0]
+            beta = self.pn.get_action(k=K)
 
             condition1 = abs(np.pi - self._obs[8] % 2 * np.pi) < self.options.target['bounds']['coordinator_angle_max']
             condition2 = self._obs[0] < max(self.options.target['bounds']['detection_distance_range'])
@@ -405,6 +405,11 @@ class Interception2D(Env):
         terminated = self.terminated
         if terminated:
             self.history['terminal_distance'].append(self._obs[0])
+            self.history['n_episodes'] += 1
+            if 'hit' in self.status.lower():
+                self.history['hits_count'] += 1
+            else:
+                self.history['misses_count'] += 1
             self.info = 'Terminated'
         reward = self.reward
 
@@ -412,7 +417,7 @@ class Interception2D(Env):
 
     @property
     def terminated(self):
-        _, _, _, _, _, _, velR, eta_m, eta_t, _, _ = self._obs
+        d, _, _, _, _, _, velR, eta_m, eta_t, _, _ = self._obs
         _, target_state = self.target.get_state()
         missile_terminated, missile_info = self.missile.terminated()
         target_terminated, target_info = self.target.terminated()
@@ -442,7 +447,7 @@ class Interception2D(Env):
             return True
 
         if self._locked_on:
-            if abs(eta_m) > self.missile.bounds['coordinator_angle_max']:
+            if abs(eta_m) > self.missile.bounds['coordinator_angle_max'] and d > 1e3:
                 self.missile.status = 'Target  lost'
                 self.status = f"MISSILE: {self.missile.status}. Eps = {abs(np.rad2deg(eta_m)):.2f} grad"
                 return True
@@ -577,14 +582,24 @@ class Interception2D(Env):
 
     @property
     def missile_reward(self):
+        d, _, _, nM, _, _, velR, eps, q, _, _ = self._obs
+
         if 'hit' in self.status.lower():
             return self.missile_reward_params['cHit']
         if 'missile' in self.status.lower():
             return self.missile_reward_params['cMiss']
-        if self.buffer:
-            return self.missile_reward_params['cPos'] if self.buffer['d_'] < self.buffer['d'] else \
-                self.missile_reward_params['cNeg']
-        return 0
+
+        c1 = n_degree_curve(d, (0, 80e3), (0, 1), 0.3)
+        c2 = 1. - c1
+        c3 = 1.
+        c4 = 1.
+
+        r1 = -np.log((self.observation_space.high[6] - velR) / self.observation_space.high[6])
+        r2 = -np.log(abs(eps) / self.options.missile['bounds']['coordinator_angle_max'])
+        r3 = -np.log(abs(nM) / self.options.missile['bounds']['overload_max'])
+        r4 = -np.log(max(d, 0) / self.buffer['d0'])
+
+        return (c1 * r1) + (c2 * r2) + (c3 * r3) + (c4 * r4)
 
     @property
     def target_reward(self):
@@ -593,11 +608,11 @@ class Interception2D(Env):
             return self.target_reward_params['cHit']
         if 'missile' in self.status.lower():
             return self.target_reward_params['cMiss']
-        c1 = n_degree_curve(d, (-1000, 80.1e3), (0, self.target_reward_params['cV0']), self.target_reward_params['nV'])
+        c1 = n_degree_curve(d, (0, 80e3), (0, self.target_reward_params['cV0']), self.target_reward_params['nV'])
         c2 = 1. - c1
         i = self.importance(np.rad2deg(q), d)[0]
         r = (c1 * (np.exp(-velR / self.observation_space.high[6])) +
-             c2 * (abs(eps) / self._bounds['missile']['coordinator_angle_max']))
+             c2 * (abs(eps) / self.options.missile['bounds']['coordinator_angle_max']))
 
         return r * i
 

@@ -230,7 +230,7 @@ def make_scenario_batches(
         zones,
         target_centered: bool = False,
         plot: bool = False,
-        seed: int = 1000
+        seed: int = 1001
 ):
     scenario_batches = []
     for zone in zones:
@@ -253,10 +253,10 @@ def make_scenario_batches(
 
 
 train_zones = [
-    {'d_min': 20000,
-     'd_max': 80000,
+    {'d_min': 10000,
+     'd_max': 50000,
      'q_min': 0,
      'q_max': 180,
-     'n': 200
+     'n': 500
      }
 ]

@@ -3,7 +3,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from src import Interception2D
 from src.scenarios import make_scenario_batches, train_zones
 from src.options import BASE_PATH, LOG_PATH
-from src.callbacks import SubprocVecEnvCallback
+from src.callbacks import SPVECallback
 import os
 import torch
 from typing import Union
@@ -52,7 +52,7 @@ def make_modelname(name_const):
 
 def train(
         batches: list,
-        total_timesteps: int = 5_000_000,
+        total_timesteps: int = 3_500_000,
         model: Union[str, None] = None,
         save=True,
         target_reward_params=None
@@ -84,7 +84,7 @@ def train(
 
         model = SAC(**kwargs)
 
-    spv_callback = SubprocVecEnvCallback(model.env)
+    spv_callback = SPVECallback(model.env)
 
     for i, scenarios in enumerate(batches):
         model.env.set_attr('scenarios', scenarios)
@@ -105,7 +105,7 @@ def train(
 
 if __name__ == '__main__':
 
-    train_zones.reverse()
+    # train_zones.reverse()
 
     scenario_batches = make_scenario_batches(
         zones=train_zones,

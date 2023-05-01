@@ -14,6 +14,7 @@ class Missile2D:
         self._overload = None
         self.status = 'Initialized'
         self._altitude = None
+        self.buffer = None
 
     def __str__(self):
         return f"{self.status}. Current state: {self.state}"
@@ -44,15 +45,24 @@ class Missile2D:
         mach = state[2]['vel'] * self.speed_of_sound
         self._overload = self.aerodynamics.force_y(q, mach, self._beta) / self.energetics.mass(self.t) / self.grav_accel
         self.status = 'Alive'
+        self.buffer = {
+            'prev_beta': self._beta,
+            'prev_t': self.t
+        }
         return self.state
 
     def step(self, beta):
         assert self.state is not None, 'Call reset before using this method.'
+
+        diff_beta = beta - self.buffer['prev_beta']
+        diff_t = self.t - self.buffer['prev_t']
+        beta_dot = diff_beta / (diff_t if diff_t > 0 else 1)
         x, z, vel, psi = self.state
         thrust, mass = self.energetics.thrust(self.t), self.energetics.mass(self.t)
         mach = vel / self.speed_of_sound
         q = self.density * vel ** 2 / 2
-        beta = np.copysign(min(abs(beta), self.bounds['beta_max']), beta)
+        beta = np.copysign(min(abs(beta), self.bounds['beta_max']), beta) if beta_dot < self.bounds['beta_step_max'] \
+            else self.buffer['prev_beta'] + np.copysign(self.bounds['beta_step_max'], diff_beta)
         force_x = self.aerodynamics.force_x(q, mach, beta)
         force_z = self.aerodynamics.force_y(q, mach, beta)
         self._overload = force_z / mass / self.grav_accel
@@ -60,6 +70,8 @@ class Missile2D:
         if k > 1:
             beta *= k
         self._beta = beta
+        self.buffer['prev_beta'] = self._beta
+        self.buffer['prev_t'] = self.t
         return np.array([
             vel * np.cos(psi),
             vel * np.sin(psi),

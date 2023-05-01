@@ -21,6 +21,7 @@ missile:
   mach_range: [ 0.8, 5.5 ]
   coordinator_angle_max: 40
   beta_max: 30
+  beta_step_max: 1
   mass: [ 100, 165 ]
 
 target:

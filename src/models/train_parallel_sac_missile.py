@@ -3,7 +3,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from src import Interception2D
 from src.scenarios import make_scenario_batches, train_zones
 from src.options import BASE_PATH, LOG_PATH
-from src.callbacks import SubprocVecEnvCallback
+from src.callbacks import SPVECallback
 import os
 import torch
 from typing import Union
@@ -28,7 +28,7 @@ def make_env(
             scenarios=[],
             target_reward_params=target_reward_params
         )
-        target_model = SAC.load(os.path.join(BASE_PATH, 'models', 'SAC-T'), env=target_env)
+        target_model = SAC.load(os.path.join(BASE_PATH, 'models', 'SAC-T_1'), env=target_env)
         env_ = Interception2D(
             agent='both',
             bounds='bounds.yaml',
@@ -61,7 +61,7 @@ def make_modelname(name_const):
 
 def train(
         batches: list,
-        total_timesteps: int = 5_000_000,
+        total_timesteps: int = 7_000_000,
         model: Union[str, None] = None,
         save=True,
         missile_reward_params=None
@@ -73,9 +73,15 @@ def train(
         kwargs = yaml.safe_load(f)
 
     if isinstance(model, str):
-        MODELNAME = model
+        MODELNAME = make_modelname('SAC-M')
+        # LOGPATHNAME = make_logpathname('SAC-M')
         device = kwargs.pop('device')
-        model = SAC.load(os.path.join(BASE_PATH, 'models', MODELNAME), env=spv_env, device=device)
+        model = SAC.load(
+            os.path.join(BASE_PATH, 'models', model),
+            env=spv_env,
+            device=device,
+            # tensorboard_log=LOGPATHNAME
+        )
     else:
         LOGPATHNAME = make_logpathname('SAC-M')
         MODELNAME = make_modelname('SAC-M')
@@ -93,7 +99,7 @@ def train(
 
         model = SAC(**kwargs)
 
-    spv_callback = SubprocVecEnvCallback(model.env)
+    spv_callback = SPVECallback(env=model.env, clean_buffer_freq=int(1e10))
 
     for i, scenarios in enumerate(batches):
         model.env.set_attr('scenarios', scenarios)
@@ -114,7 +120,7 @@ def train(
 
 if __name__ == '__main__':
 
-    train_zones.reverse()
+    # train_zones.reverse()
 
     scenario_batches = make_scenario_batches(
         zones=train_zones,
@@ -123,7 +129,7 @@ if __name__ == '__main__':
     )
 
     sac = train(
-        model=None,
+        model='SAC-M_1',
         batches=scenario_batches,
         save=True
     )

@@ -51,6 +51,7 @@ class Options:
         self.env['bounds']['escape_sector_angle'] *= np.pi / 180
         self.missile['bounds']['coordinator_angle_max'] *= np.pi / 180
         self.missile['bounds']['beta_max'] *= np.pi / 180
+        self.missile['bounds']['beta_step_max'] *= np.pi / 180
         self.target['bounds']['coordinator_angle_max'] *= np.pi / 180
 
     def set_states(self, values):

@@ -1,6 +1,7 @@
 import numpy as np
 from ..options import CartPoint
 from ..common import n_degree_curve
+from typing import Union
 
 
 def k_foo_alternative(*args):
@@ -19,9 +20,11 @@ class PN:
 
     UPD_FACTOR = 0  # время обновления точки прицеливания, с
 
-    def __init__(self, env: object, k_foo=k_foo_alternative):
+    def __init__(
+            self,
+            env: object
+    ):
         self.env = env
-        self.k_foo = k_foo
         self.params = {'multiplier': 0}
         self.log = None
 
@@ -34,7 +37,10 @@ class PN:
         log0 = np.array([self.t0, 0])
         self.log = np.array([log0], dtype=np.object)
 
-    def get_action(self):
+    def get_action(
+            self,
+            k: Union[int, float, None] = None
+    ):
 
         los_state = self.env.los.get_state()
         _, _, missile_state = self.env.missile.get_state()
@@ -52,11 +58,12 @@ class PN:
         if t >= self.t0 + self.UPD_FACTOR * self.params['multiplier']:
             d_r, d_chi = self.env.los.step(missile_state, target_state)
 
-            K = self.k_foo(vel, self.altitude)
-            d_psi = K * d_chi
+            if not k:
+                k = k_foo_alternative(vel, self.altitude)
+            d_psi = k * d_chi
             self.params['action'] = self.env.missile.get_required_beta(d_psi)
             self.params['multiplier'] += 1
-            self.params['K'] = K
+            self.params['K'] = k
 
         appendix = np.array([t, self.params['K']])
         self.log = np.append(self.log, [appendix], axis=0)
