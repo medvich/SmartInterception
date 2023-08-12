@@ -1,15 +1,14 @@
-from dataclasses import dataclass, InitVar
+from dataclasses import dataclass
 
 
 @dataclass
 class Energetics:
-    options: InitVar[dict]
+    mass0: float = 165.
+    omega0: float = 65.
+    specific_impulse: float = 1900.
+    t_act: float = 6.
 
-    def __post_init__(self, options):
-        self.omega0 = options['omega0']
-        self.mass0 = options['mass0']
-        self.t_act = options['t_act']
-        self.specific_impulse = options['specific_impulse']
+    def __post_init__(self):
         self.rate = self.omega0 / self.t_act
 
     def mass(self, t):

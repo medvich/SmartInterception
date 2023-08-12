@@ -3,53 +3,60 @@ from ambiance import Atmosphere
 
 
 class Target2D:
-    def __init__(self, options: dict):
-        self.sOs = float(Atmosphere(options['altitude']).speed_of_sound)
-        self.g = float(Atmosphere(options['altitude']).grav_accel)
-        self._initial_acceleration, self._initial_state = options['initial_state']
-        self.bounds = options['bounds']
-        self._state, self.t = None, None
-        self._overload = None
+    def __init__(self, bounds: dict):
+        self.bounds = bounds
         self.status = 'Initialized'
-        self._acceleration = None
-        self._prev_acceleration = None
+        self.acceleration, self.state = None, None
+        self.t = None
+        self._overload = None
+        self._altitude = None
+        self.buffer = None
 
     def __str__(self):
-        return f"{self.status}. Current state: {self._state}"
+        return f"{self.status}. Current state: {self.state}"
 
     def get_state(self):
-        return self.t, self._state
+        return self.t, self.state
 
     def set_state(self, state, **kw):
-        self._state = state
+        self.state = state
         if 't' in kw:
             self.t = kw['t']
 
-    def reset(self):
+    def reset(self, state):
         self.t = 0
-        self._state = np.array(
+        self.acceleration = state[0]
+        self.state = np.array(
             [
-                self._initial_state['x'],
-                self._initial_state['z'],
-                self._initial_state['vel'],
-                self._initial_state['psi']
+                state[1]['x'],
+                state[1]['z'],
+                state[1]['vel'],
+                state[1]['psi']
             ], dtype=np.float32
         )
-        self._overload = 0
+
+        self._overload = self.acceleration.z / self.grav_accel
         self.status = 'Alive'
-        self._acceleration = self._initial_acceleration
-        self._prev_acceleration = self._initial_acceleration
-        return self._state
+        self.buffer = {
+            'prev_acceleration': self.acceleration
+        }
+        return self.state
 
     def step(self, acceleration):
         assert ('x' and 'z') in acceleration._fields, 'Acceleration must be a namedtuple with x and z fields'
-        assert self._state is not None, 'Call reset before using this method.'
-        diff_z = acceleration.z - self._prev_acceleration.z
-        new_aZ = self._prev_acceleration.z + np.copysign(min(abs(diff_z), 9), diff_z)
-        self._acceleration = acceleration._replace(z=new_aZ)
-        x, z, vel, psi = self._state
-        self._overload = self._acceleration.z / self.g
-        self._prev_acceleration = self._acceleration
+        assert self.state is not None, 'Call reset before using this method.'
+
+        prev_acceleration = self.buffer['prev_acceleration']
+        diff = acceleration.z - prev_acceleration.z
+        self.acceleration = acceleration._replace(
+            z=prev_acceleration.z + np.copysign(min(abs(diff), self.bounds['acceleration_z_step_max']), diff)
+        )
+
+        x, z, vel, psi = self.state
+
+        self._overload = self.acceleration.z / self.grav_accel
+        self.buffer['prev_acceleration'] = self.acceleration
+
         return np.array([
             vel * np.cos(psi),
             vel * np.sin(psi),
@@ -57,18 +64,32 @@ class Target2D:
             acceleration.z / vel
         ], copy=False, dtype=np.float32)
 
-    def terminal(self):
-        x, z, vel, psi = self._state
-        mach = vel / self.sOs
+    def terminated(self):
+        x, z, vel, psi = self.state
+        mach = vel / self.speed_of_sound
         if not (min(self.bounds['mach_range']) < mach < max(self.bounds['mach_range'])):
             self.status = 'Out of Ma bounds'
             return True, f"{self.status}. Ma = {mach:.2f}"
         return False, None
 
     @property
+    def altitude(self):
+        return self._altitude
+
+    @altitude.setter
+    def altitude(self, altitude: float) -> None:
+        self._altitude = altitude
+
+    @property
+    def speed_of_sound(self):
+        assert self._altitude is not None
+        return float(Atmosphere(self._altitude).speed_of_sound)
+
+    @property
+    def grav_accel(self):
+        assert self._altitude is not None
+        return float(Atmosphere(self._altitude).grav_accel)
+
+    @property
     def overload(self):
         return self._overload
-
-    def acceleration(self):
-        return self._acceleration
-

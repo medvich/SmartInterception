@@ -1,0 +1,15 @@
+device: 'cuda'
+verbose: 0
+buffer_size: 2000000
+learning_starts: 1000
+batch_size: 155
+learning_rate: 0.0002
+tau: 0.62
+train_freq: [ 1000, 'step' ]
+gamma: 0.98
+ent_coef: 'auto_0.5'
+policy_kwargs:
+  activation_fn: 'ELU'
+  net_arch:
+    pi: [ 128, 128, 128 ]
+    qf: [ 128, 128, 128 ]

@@ -5,51 +5,19 @@
 
 ---
 environment:
-  tau: 0.1
   altitude: 15000
   initial_distance: 20000
   initial_heading_error: 10
   initial_heading_angle: 45
   target_centered: False
   initial_psi: 90
-  bounds:
-    termination_time: 150
-    simulation_zone_radius: 90000
-    mach_range: [ 0.5, 7 ]
-    initial_distance_range: [ 500, 80000 ]
-    altitude_range: [ 200, 25000 ]
-    escape_sector_angle: 50
-    escape_distance: 90000
+
 missile:
-  bounds:
-    explosion_distance: 15
-    lock_on_distance: 20000
-    overload_max: 45
-    relative_velocity_min: 150
-    mach_range: [ 0.9, 7 ]
-    coordinator_angle_max: 40
-    beta_max: 30
-  initial_state:
-    beta: 0
-    alpha: 3 # const
-    vel: 300
-  energetics:
-    mass0: 155
-    omega0: 55
-    specific_impulse: 1900
-    t_act: 6
-  aerodynamics:
-    cx0_filename: cx0.csv
-    cyA_filename: cyA.csv
-    wing:
-      area: 0.372
+  beta: 0
+  alpha: 3
+  vel: 300
+
 target:
-  initial_state:
-    acceleration_x: 0
-    acceleration_z: 0
-    vel: 300
-  bounds:
-    overload_max: 8
-    mach_range: [ 0.5, 2 ]
-    detection_distance_range: [ 1000, 40000 ]
-    coordinator_angle_max: 40
+  acceleration_x: 0
+  acceleration_z: 0
+  vel: 300

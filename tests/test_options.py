@@ -8,8 +8,14 @@ from src.options import Options, BASE_PATH
 import os
 import yaml
 
-
+BOUNDS_FILENAME = 'bounds.yaml'
 VALUES_FILENAME = 'values.yaml'
+
+with open(os.path.join(BASE_PATH, 'src', BOUNDS_FILENAME)) as f:
+    bounds = yaml.safe_load(f)
+
+opts = Options()
+# opts.set_bounds(bounds)
 
 
 @pytest.mark.parametrize(
@@ -34,7 +40,7 @@ def test_target_centered_initial_state(distance, eps, q, psi, xM, zM, psiM):
     values['environment']['target_centered'] = True
     values['environment']['initial_psi'] = psi
 
-    opts = Options(values)
+    opts.set_states(values)
 
     assert xM == pytest.approx(opts.missile['initial_state'][2]['x'], abs=0.1)
     assert zM == pytest.approx(opts.missile['initial_state'][2]['z'], abs=0.1)
@@ -61,7 +67,7 @@ def test_missile_centered_initial_state(distance, eps, q, psi, xT, zT, psiT, psi
     values['environment']['target_centered'] = False
     values['environment']['initial_psi'] = psi
 
-    opts = Options(values)
+    opts.set_states(values)
 
     assert xT == pytest.approx(opts.target['initial_state'][1]['x'], abs=0.1)
     assert zT == pytest.approx(opts.target['initial_state'][1]['z'], abs=0.1)
