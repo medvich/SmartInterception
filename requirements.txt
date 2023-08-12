@@ -11,5 +11,5 @@ plotly==5.6.0
 matplotlib==3.5.1
 stable-baselines3==1.7.0
 torch==1.13.1+cu117
-optuna==3.1.1
-joblib==1.1.0
+# optuna==3.1.1
+joblib==1.3.2

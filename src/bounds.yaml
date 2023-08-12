@@ -11,7 +11,7 @@ environment:
   initial_distance_range: [ 500, 80000 ]
   altitude_range: [ 500, 20000 ]
   escape_sector_angle: 50
-  escape_distance: 100000
+  escape_distance: 300000
 
 missile:
   explosion_distance: &ref 15

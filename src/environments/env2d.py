@@ -314,7 +314,7 @@ class Interception2D(Env):
         assert self._obs is not None, 'Call reset before using this method.'
 
         if self.agent == 'target':
-            beta = self.pn.get_action()
+            beta = self.pn.get_action(k=1)
             aZ = self.rescale_action(action)
         # elif self.agent == 'missile':
         #     assert self._target_action is not None, 'Set target action before it'
@@ -335,11 +335,14 @@ class Interception2D(Env):
             condition2 = self._obs[0] < max(self.options.target['bounds']['detection_distance_range'])
             condition3 = self._obs[0] > min(self.options.target['bounds']['detection_distance_range'])
 
-            if all([condition1, condition2, condition3]) or self._locked_on:
-                target_action, _ = self.target_model.predict(self.normalize_state(self._obs))
-                aZ = self.rescale_action(target_action, agent='target')
-            else:
-                aZ = self.options.target['initial_state'][0].z
+            target_action, _ = self.target_model.predict(self.normalize_state(self._obs))
+            aZ = self.rescale_action(target_action, agent='target')
+
+            # if all([condition1, condition2, condition3]) or self._locked_on:
+            #     target_action, _ = self.target_model.predict(self.normalize_state(self._obs))
+            #     aZ = self.rescale_action(target_action, agent='target')
+            # else:
+            #     aZ = self.options.target['initial_state'][0].z
         else:
             assert self._target_action is not None, 'Set target action before it'
             beta = self.pn.get_action()
@@ -447,7 +450,7 @@ class Interception2D(Env):
             return True
 
         if self._locked_on:
-            if abs(eta_m) > self.missile.bounds['coordinator_angle_max'] and d > 1e3:
+            if abs(eta_m) > self.missile.bounds['coordinator_angle_max'] + np.radians(20) and d > 1e3:
                 self.missile.status = 'Target  lost'
                 self.status = f"MISSILE: {self.missile.status}. Eps = {abs(np.rad2deg(eta_m)):.2f} grad"
                 return True
